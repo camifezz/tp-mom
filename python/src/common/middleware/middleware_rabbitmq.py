@@ -4,35 +4,116 @@ import string
 from .middleware import MessageMiddlewareQueue, MessageMiddlewareExchange
 
 class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
+    """
+    Implementación de MessageMiddlewareQueue para RabbitMQ.
+    Maneja comunicación punto a punto mediante una cola nombrada.
+    Varios productores pueden enviar a la misma cola y varios
+    consumidores compiten por los mensajes (cada mensaje lo recibe uno solo).
+    """
 
     def __init__(self, host, queue_name):
-        pass
+        """
+        Conecta a RabbitMQ y declara la cola.
+        - host: dirección del broker RabbitMQ
+        - queue_name: nombre de la cola a usar
+        """
+        self.host = host
+        self.queue_name = queue_name
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(self.host)) # conexión con el broker, puedo pasarle cualquier IP
+        self.channel = self.connection.channel()
+        self.queue = self.channel.queue_declare(queue=self.queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
 
     def send(self, message):
-        pass
+        """
+        Publica un mensaje en la cola.
+        - message: contenido del mensaje a enviar
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        Lanza MessageMiddlewareMessageError si ocurre un error interno.
+        """
+        self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=message)
+        print(f" [x] Sent {message}")
+
 
     def start_consuming(self, on_message_callback):
+        """
+        Comienza a escuchar mensajes de la cola de forma bloqueante.
+        Por cada mensaje recibido invoca: on_message_callback(message, ack, nack)
+          - message: cuerpo del mensaje
+          - ack: función para confirmar el mensaje
+          - nack: función para rechazar el mensaje
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        Lanza MessageMiddlewareMessageError si ocurre un error interno.
+        """
         pass
 
     def stop_consuming(self):
+        """
+        Detiene la escucha de mensajes. Si no se estaba consumiendo, no tiene efecto.
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        """
         pass
 
     def close(self):
-        pass
-
+        """
+        Cierra el canal y la conexión con RabbitMQ.
+        Lanza MessageMiddlewareCloseError si ocurre un error al cerrar.
+        """
+        self.connection.close()
 class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
+    """
+    Implementación de MessageMiddlewareExchange para RabbitMQ.
+    Maneja comunicación pub-sub mediante un exchange de tipo direct.
+    Los mensajes se enrutan por routing keys: cada consumidor recibe
+    los mensajes de las routing keys a las que está suscripto.
+    A diferencia de la queue, todos los consumidores suscritos a una
+    routing key reciben el mismo mensaje (broadcast por key).
+    """
 
     def __init__(self, host, exchange_name, routing_keys):
-        pass
+        """
+        Conecta a RabbitMQ y declara el exchange.
+        - host: dirección del broker RabbitMQ
+        - exchange_name: nombre del exchange a usar
+        - routing_keys: lista de claves de enrutamiento a las que suscribirse al consumir
+        """
+        self.exchange_name = exchange_name
+        self.routing_keys = routing_keys
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+        self.channel = self.connection.channel()
+        self.channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
 
     def send(self, message):
+        """
+        Publica un mensaje en el exchange.
+        - message: contenido del mensaje a enviar (debe incluir la routing key destino)
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        Lanza MessageMiddlewareMessageError si ocurre un error interno.
+        """
         pass
 
     def start_consuming(self, on_message_callback):
+        """
+        Crea una cola temporal con nombre único, la bindea al exchange
+        para cada routing key de self.routing_keys, y comienza a escuchar.
+        Por cada mensaje recibido invoca: on_message_callback(message, ack, nack)
+          - message: cuerpo del mensaje
+          - ack: función para confirmar el mensaje
+          - nack: función para rechazar el mensaje
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        Lanza MessageMiddlewareMessageError si ocurre un error interno.
+        """
         pass
 
     def stop_consuming(self):
+        """
+        Detiene la escucha de mensajes. Si no se estaba consumiendo, no tiene efecto.
+        Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
+        """
         pass
 
     def close(self):
+        """
+        Elimina la cola temporal, cierra el canal y la conexión con RabbitMQ.
+        Lanza MessageMiddlewareCloseError si ocurre un error al cerrar.
+        """
         pass
