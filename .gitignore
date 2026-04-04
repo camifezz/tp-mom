@@ -288,6 +288,9 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# Python version
+.python-version
+
 # End of https://www.toptal.com/developers/gitignore/api/python,go,linux,macos,windows,visualstudiocode
 
 # Failsafe to avoid pushing the testing solution to the git commit history
