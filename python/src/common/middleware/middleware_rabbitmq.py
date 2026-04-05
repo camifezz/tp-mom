@@ -39,19 +39,28 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
         Comienza a escuchar mensajes de la cola de forma bloqueante.
         Por cada mensaje recibido invoca: on_message_callback(message, ack, nack)
           - message: cuerpo del mensaje
-          - ack: función para confirmar el mensaje
-          - nack: función para rechazar el mensaje
+          - ack: función para confirmar que el mensaje se recibió correctamente (equivalente a un 200)
+          - nack: función para indicar que algo falló procesando el mensaje (equivalente al 500)
         Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
         Lanza MessageMiddlewareMessageError si ocurre un error interno.
         """
-        pass
+        def callback(ch, method, properties, body):
+            print(f" [x] Received {body}")
+            ack  = lambda: ch.basic_ack(method.delivery_tag)
+            nack = lambda: ch.basic_nack(method.delivery_tag)
+            on_message_callback(body, ack, nack)
+
+        self.channel.basic_consume(queue=self.queue_name,
+                                   auto_ack=False,
+                                   on_message_callback=callback)
+        self.channel.start_consuming()
 
     def stop_consuming(self):
         """
         Detiene la escucha de mensajes. Si no se estaba consumiendo, no tiene efecto.
         Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
         """
-        pass
+        self.channel.stop_consuming()
 
     def close(self):
         """
