@@ -90,6 +90,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host))
         self.channel = self.connection.channel()
         self.channel.exchange_declare(exchange=exchange_name, exchange_type='direct')
+        self.temp_queue_name = None
 
     def send(self, message):
         """
@@ -98,7 +99,10 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
         Lanza MessageMiddlewareMessageError si ocurre un error interno.
         """
-        pass
+        self.channel.basic_publish(exchange=self.exchange_name,
+                               routing_key=self.routing_keys[0], # Solo tengo una sola routing_key, si tuviera mas tendría que hacer un loop
+                               body=message)
+        print(f" [x] Sent {self.routing_keys[0]}:{message}")
 
     def start_consuming(self, on_message_callback):
         """
@@ -111,18 +115,32 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
         Lanza MessageMiddlewareMessageError si ocurre un error interno.
         """
-        pass
+        result = self.channel.queue_declare(queue='', exclusive=True)
+        self.temp_queue_name = result.method.queue
+        for routing_key in self.routing_keys:
+            self.channel.queue_bind(exchange=self.exchange_name,
+                            queue=self.temp_queue_name,
+                            routing_key=routing_key)
+        def callback(ch, method, properties, body):
+            print(f" [x] Received {body}")
+            ack  = lambda: ch.basic_ack(method.delivery_tag)
+            nack = lambda: ch.basic_nack(method.delivery_tag)
+            on_message_callback(body, ack, nack)
+        self.channel.basic_consume(queue=self.temp_queue_name, on_message_callback=callback, auto_ack=False)
+        self.channel.start_consuming()
+
+
 
     def stop_consuming(self):
         """
         Detiene la escucha de mensajes. Si no se estaba consumiendo, no tiene efecto.
         Lanza MessageMiddlewareDisconnectedError si se perdió la conexión.
         """
-        pass
+        self.channel.stop_consuming()
 
     def close(self):
         """
         Elimina la cola temporal, cierra el canal y la conexión con RabbitMQ.
         Lanza MessageMiddlewareCloseError si ocurre un error al cerrar.
         """
-        pass
+        self.connection.close()
